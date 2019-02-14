@@ -27,8 +27,10 @@ def get_dt(filename):
     return preprocess_summary_file(dt, mnist_test_labels)
 
 def process_solve_status(s):
-    if s == "InfeasibleOrUnbounded":
-        return "ProvablyRobust"
+    if s == "Infeasible" or s == "Unbounded" or s == "InfeasibleOrUnbounded":
+        return "ProvablyRobustByClass"
+    elif s == "InfeasibleDistance":
+        return "ProvablyRobustByDistance"
     elif s == "UserLimit":
         return "StatusUnknown"
     else:

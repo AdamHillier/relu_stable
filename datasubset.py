@@ -18,7 +18,7 @@ import numpy as np
 
 class DataSubset(object):
     def __init__(self, xs, ys, size):
-        if size < 55000:
+        if size < len(xs):
             xs, ys = self._per_class_subsample(xs, ys, size)
         self.xs = xs
         self.n = xs.shape[0]

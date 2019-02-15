@@ -39,6 +39,7 @@ class Model(object):
         h_conv2_flat = tf.reshape(self.h_conv2, [-1, 7 * 7 * filters[1]])
         self.h_fc_pre_relu = tf.matmul(h_conv2_flat, self.W_fc1) + b_fc1
         self.h_fc1 = tf.nn.relu(self.h_fc_pre_relu)
+        self.last_hidden_layer = self.h_fc1
 
         # l1 loss, with weights scaled based on the fully-connected matrix each conv layer represents
         self.l1_loss = 14 * 14 * self._l1(self.W_conv1) + 7 * 7 * self._l1(self.W_conv2) + self._l1(self.W_fc1)

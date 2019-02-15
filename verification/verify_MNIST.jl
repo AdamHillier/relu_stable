@@ -5,15 +5,24 @@ using MAT
 
 model_name = ARGS[1]
 println(model_name)
-eps = parse(Float64, ARGS[2])
 
-if isassigned(ARGS, 3)
-    start_index = parse(Int64, ARGS[3])
+eps = parse(Float64, ARGS[2])
+println(eps)
+
+if ARGS[3] != "none"
+    distance_threshold = parse(Float64, ARGS[3])
+else
+    distance_threshold = nothing
+end
+println(distance_threshold)
+
+if isassigned(ARGS, 4)
+    start_index = parse(Int64, ARGS[4])
 else
     start_index = 1
 end
-if isassigned(ARGS, 4)
-    end_index = parse(Int64, ARGS[4])
+if isassigned(ARGS, 5)
+    end_index = parse(Int64, ARGS[5])
 else
     end_index = 10000
 end
@@ -43,7 +52,11 @@ if haskey(param_dict, "fc3/mask")
 else
     m3 = ReLU()
 end
-softmax = get_matrix_params(param_dict, "softmax", (c3_size, 10))
+if distance_threshold === nothing
+    softmax = get_matrix_params(param_dict, "softmax", (c3_size, 10))
+else
+    softmax = get_matrix_params(param_dict, "softmax_with_dists", (c3_size, 55))
+end
 
 nnparams = Sequential(
     [Flatten(4), fc1, m1, fc2, m2, fc3, m3, softmax],
@@ -52,26 +65,25 @@ nnparams = Sequential(
 
 mnist = read_datasets("MNIST")
 
-f = frac_correct(nnparams, mnist.test, 10000)
-println("Fraction correct: $(f)")
-
 println("Verifying $(start_index) through $(end_index)")
 target_indexes = start_index:end_index
 
 MIPVerify.setloglevel!("info")
 
 MIPVerify.batch_find_untargeted_attack(
-    nnparams, 
+    nnparams,
     mnist.test, 
     target_indexes, 
-    GurobiSolver(Gurobi.Env(), BestObjStop=eps, TimeLimit=120),
+    10,
+    distance_threshold,
+    GurobiSolver(Gurobi.Env(), BestObjStop=eps, TimeLimit=180),
     save_path="./verification/results/",
     norm_order=Inf, 
     tightening_algorithm=lp,
     rebuild=false,
     cache_model=false,
-    tightening_solver=GurobiSolver(Gurobi.Env(), TimeLimit=5, OutputFlag=0),
+    tightening_solver=GurobiSolver(Gurobi.Env(), TimeLimit=10, OutputFlag=0),
     pp = MIPVerify.LInfNormBoundedPerturbationFamily(eps),
-    solve_rerun_option = MIPVerify.resolve_ambiguous_cases
+    solve_rerun_option = MIPVerify.never
 )
 

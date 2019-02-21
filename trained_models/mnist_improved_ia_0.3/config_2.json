@@ -1,0 +1,40 @@
+{
+  "_comment": "===== RS LOSS CONFIGURATION =====",
+  "w_l1": 2e-5,
+  "w_rsloss": 12e-5,
+
+  "dataset": "mnist",
+
+  "_comment": "===== MODEL CONFIGURATION =====",
+  "model_dir": "trained_models/mnist_improved_ia_0.3",
+  "estimation_method": "improved_ia",
+  "filters": [16, 32, 100],
+  "filter_size": 5,
+  "sparse_init": -1.0,
+
+  "_comment": "===== TRAINING CONFIGURATION =====",
+  "random_seed": 7564157194,
+  "max_num_training_steps": 47500,
+  "num_output_steps": 100,
+  "num_summary_steps": 100,
+  "num_checkpoint_steps": 2500,
+  "num_eval_steps": 2500,
+  "num_training_examples": 55000,
+  "training_batch_size": 32,
+  "eval_during_training": true,
+  "adversarial_training": true,
+
+  "_comment": "===== EVAL CONFIGURATION =====",
+  "num_eval_examples": 10000,
+  "eval_batch_size": 32,
+  "eval_on_cpu": true,
+
+  "_comment": "=====ADVERSARIAL EXAMPLES CONFIGURATION=====",
+  "epsilon": 0.3,
+  "k": 8,
+  "a": 0.03,
+  "random_start": true,
+  "loss_func": "xent",
+  "incremental": false,
+  "eval_epsilon": 0.3
+}

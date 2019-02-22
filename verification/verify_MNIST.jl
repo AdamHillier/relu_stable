@@ -1,3 +1,4 @@
+using ArgParse
 using MIPVerify
 using Gurobi
 using Memento
@@ -9,23 +10,32 @@ println(model_name)
 eps = parse(Float64, ARGS[2])
 println(eps)
 
-if ARGS[3] != "none"
-    distance_threshold = parse(Float64, ARGS[3])
+if ARGS[3] == "none"
+    adv_pred_opt = MIPVerify.None()
+elseif ARGS[3] == "find_min_dist_threshold"
+    adv_pred_opt = MIPVerify.FindMinDistanceThreshold()
 else
-    distance_threshold = nothing
+    adv_pred_opt = MIPVerify.MinDistanceThreshold(parse(Float32, ARGS[3]))
 end
-println(distance_threshold)
+println(adv_pred_opt)
 
-if isassigned(ARGS, 4)
-    start_index = parse(Int64, ARGS[4])
+dataset = ARGS[4]
+@assert(dataset == "validation" || dataset == "test")
+println(dataset)
+
+if isassigned(ARGS, 5)
+    start_index = parse(Int64, ARGS[5])
 else
     start_index = 1
 end
-if isassigned(ARGS, 5)
-    end_index = parse(Int64, ARGS[5])
+if isassigned(ARGS, 6)
+    end_index = parse(Int64, ARGS[6])
+elseif dataset == "validation"
+    end_index = 5000
 else
     end_index = 10000
 end
+println("Verifying $(start_index) through $(end_index)")
 
 path="./model_mats/$(model_name).mat"
 param_dict = path |> matread
@@ -52,7 +62,7 @@ if haskey(param_dict, "fc3/mask")
 else
     m3 = ReLU()
 end
-if distance_threshold === nothing
+if adv_pred_opt == MIPVerify.None()
     softmax = get_matrix_params(param_dict, "softmax", (c3_size, 10))
 else
     softmax = get_matrix_params(param_dict, "softmax_with_dists", (c3_size, 55))
@@ -63,27 +73,27 @@ nnparams = Sequential(
     "$(model_name)"
 )
 
-mnist = read_datasets("MNIST")
+mnist = dataset == "validation" ?
+    read_datasets("MNIST", 55001, 5000).train :
+    read_datasets("MNIST").test
 
-println("Verifying $(start_index) through $(end_index)")
 target_indexes = start_index:end_index
 
 MIPVerify.setloglevel!("info")
 
 MIPVerify.batch_find_untargeted_attack(
     nnparams,
-    mnist.test, 
-    target_indexes, 
+    mnist,
+    target_indexes,
     10,
-    distance_threshold,
+    adv_pred_opt,
     GurobiSolver(Gurobi.Env(), BestObjStop=eps, TimeLimit=180),
-    save_path="./verification/results/",
-    norm_order=Inf, 
+    save_path="./verification/results_$(dataset)/",
+    norm_order=Inf,
     tightening_algorithm=lp,
     rebuild=false,
     cache_model=false,
     tightening_solver=GurobiSolver(Gurobi.Env(), TimeLimit=10, OutputFlag=0),
     pp = MIPVerify.LInfNormBoundedPerturbationFamily(eps),
-    solve_rerun_option = MIPVerify.never
+    solve_rerun_option = MIPVerify.retarget_successful_cases
 )
-

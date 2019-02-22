@@ -1,4 +1,3 @@
-using ArgParse
 using MIPVerify
 using Gurobi
 using Memento

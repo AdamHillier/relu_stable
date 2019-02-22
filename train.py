@@ -21,6 +21,10 @@ import models.MNIST_improved_ia
 import models.MNIST_naive_ia
 from pgd_attack import LinfPGDAttack
 
+# Uncomment to run on a specific GPU in a multi-GPU environment
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 with open('config.json') as config_file:
     config = json.load(config_file)
 if os.path.exists('job_parameters.json'):
@@ -54,10 +58,27 @@ eval_batch_size = config['eval_batch_size']
 model_dir = config['model_dir']
 
 # Setting up the training data
-mnist = input_data.read_data_sets('MNIST_data', one_hot=False)
-mnist_train = DataSubset(mnist.train.images,
-                         mnist.train.labels,
-                         dataset_size)
+dataset_name = config["dataset"]
+assert(dataset_name in ["mnist", "fashion_mnist"])
+if dataset_name == "mnist":
+    mnist = input_data.read_data_sets('MNIST_data', one_hot=False)
+    X_train = mnist.train.images
+    y_train = mnist.train.labels
+    X_test = mnist.test.images
+    y_test = mnist.test.labels
+else:
+    (X_train, y_train), (X_test, y_test) = tf.keras.datasets.fashion_mnist.load_data()
+    # Fashion MNIST has shape (?, 28, 28) and lies in [0,255]^n
+    X_train = (X_train / 255.0)[:dataset_size]
+    X_test = X_test / 255.0
+
+X_train = X_train.reshape((-1, 784))
+X_test = X_test.reshape((-1, 784))
+
+training_data = DataSubset(X_train[:dataset_size],
+                           y_train[:dataset_size],
+                           dataset_size)
+
 global_step = tf.contrib.framework.get_or_create_global_step()
 
 # Setting up the model
@@ -71,9 +92,9 @@ else:
 
 # Setting up the optimizer
 train_step = tf.train.AdamOptimizer(1e-4).minimize(model.xent + \
-                                                    w_l1 * model.l1_loss + \
-                                                    w_rsloss * model.rsloss,
-                                                    global_step=global_step)
+                                                   w_l1 * model.l1_loss + \
+                                                   w_rsloss * model.rsloss,
+                                                   global_step=global_step)
 
 # Set up adversary
 attack = LinfPGDAttack(model, 
@@ -100,7 +121,7 @@ if eval_during_training and not os.path.exists(eval_dir):
     os.makedirs(eval_dir)
 
 # Keep track of accuracies in Tensorboard
-saver = tf.train.Saver(max_to_keep=3)
+saver = tf.train.Saver(max_to_keep=50)
 tf.summary.scalar('accuracy_adv_train', model.accuracy, collections = ['adv'])
 tf.summary.scalar('accuracy_adv', model.accuracy, collections = ['adv'])
 tf.summary.scalar('xent_adv_train', model.xent, collections = ['adv'])
@@ -124,21 +145,21 @@ unstable_summaries = tf.summary.merge_all('unstable')
 
 shutil.copy('config.json', model_dir)
 
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-
-with tf.Session(config=config) as sess:
+with tf.Session() as sess:
     # Initialize the summary writer, global variables, and our time counter.
     summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
     if eval_during_training:
         summary_writer_eval = tf.summary.FileWriter(eval_dir)
     sess.run(tf.global_variables_initializer())
+    # checkpoint = tf.train.latest_checkpoint(model_dir) 
+    # saver.restore(sess, checkpoint)
+
     training_time = 0.0
 
     # Main training loop
     for ii in range(max_num_training_steps + 1):
-        x_batch, y_batch = mnist_train.get_next_batch(batch_size,
-                                                      multiple_passes=True)
+        x_batch, y_batch = training_data.get_next_batch(batch_size,
+                                                        multiple_passes=True)
 
         # Compute Adversarial Perturbations
         start = timer()
@@ -200,8 +221,8 @@ with tf.Session(config=config) as sess:
                 bstart = ibatch * eval_batch_size
                 bend = min(bstart + eval_batch_size, num_eval_examples)
 
-                x_batch_eval = mnist.test.images[bstart:bend, :]
-                y_batch_eval = mnist.test.labels[bstart:bend]
+                x_batch_eval = X_test[bstart:bend, :]
+                y_batch_eval = y_test[bstart:bend]
 
                 dict_nat_eval = {model.x_input: x_batch_eval,
                                model.x_input_natural: x_batch_eval,
